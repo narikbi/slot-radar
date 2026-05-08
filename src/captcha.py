@@ -10,7 +10,7 @@ import re
 import time
 from typing import Optional
 
-import anthropic
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,10 @@ SENDER = "noreply@mfa.gov.hu"
 SUBJECT_KEYWORD = "Konzinfo"
 POLL_TIMEOUT_SEC = 90
 POLL_INTERVAL_SEC = 3
-CLAUDE_MODEL = "claude-sonnet-4-6"
+
+TWOCAPTCHA_BASE = "https://2captcha.com"
+TWOCAPTCHA_SOLVE_TIMEOUT_SEC = 120
+TWOCAPTCHA_POLL_INTERVAL_SEC = 5
 
 
 class CaptchaError(Exception):
@@ -124,40 +127,50 @@ def _extract_image(msg: email.message.Message) -> tuple[Optional[bytes], str]:
 
 
 def _solve_arithmetic(image_bytes: bytes, mime: str) -> str:
-    client = anthropic.Anthropic()
+    """Submit captcha image to 2captcha with math hint and poll for the integer answer."""
+    api_key = os.environ["TWOCAPTCHA_API_KEY"]
     b64 = base64.standard_b64encode(image_bytes).decode("ascii")
 
-    prompt = (
-        "This image is an arithmetic CAPTCHA from a Hungarian visa booking site. "
-        "It contains the SAME equation rendered multiple times with different "
-        "distortions (lines, dots, noise) — pick whichever copy is clearest, then "
-        "compute the result. The equation uses digits 0-9 and operators +, -, *, /, "
-        "ending with '=?'. Reply with ONLY the integer answer. No words, no equation, "
-        "no explanation, just the digits."
+    submit = requests.post(
+        f"{TWOCAPTCHA_BASE}/in.php",
+        data={
+            "key": api_key,
+            "method": "base64",
+            "body": b64,
+            "math": 1,
+            "json": 1,
+        },
+        timeout=30,
     )
+    submit.raise_for_status()
+    sub = submit.json()
+    if sub.get("status") != 1:
+        raise CaptchaError(f"2captcha submit failed: {sub}")
+    captcha_id = sub["request"]
+    logger.info("2captcha submitted, id=%s", captcha_id)
 
-    resp = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=16,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": mime, "data": b64},
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
-    )
+    deadline = time.time() + TWOCAPTCHA_SOLVE_TIMEOUT_SEC
+    while time.time() < deadline:
+        time.sleep(TWOCAPTCHA_POLL_INTERVAL_SEC)
+        resp = requests.get(
+            f"{TWOCAPTCHA_BASE}/res.php",
+            params={"key": api_key, "action": "get", "id": captcha_id, "json": 1},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("status") == 1:
+            answer = str(data.get("request", "")).strip()
+            m = re.search(r"-?\d+", answer)
+            if not m:
+                raise CaptchaError(f"2captcha returned non-numeric: {answer!r}")
+            return m.group(0)
+        # API returns the literal string "CAPCHA_NOT_READY" (typo is theirs) while the worker is still solving
+        if data.get("request") == "CAPCHA_NOT_READY":
+            continue
+        raise CaptchaError(f"2captcha error: {data}")
 
-    text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
-    m = re.search(r"-?\d+", text)
-    if not m:
-        raise CaptchaError(f"Claude returned non-numeric answer: {text!r}")
-    return m.group(0)
+    raise CaptchaError(f"2captcha timed out after {TWOCAPTCHA_SOLVE_TIMEOUT_SEC}s, id={captcha_id}")
 
 
 def _delete_message(mailbox: imaplib.IMAP4_SSL, uid: bytes) -> None:
