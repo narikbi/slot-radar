@@ -1,0 +1,8 @@
+{
+  "earliest_slot_date": "9999-12-31",
+  "earliest_slot_time": "00:00",
+  "earliest_slot_weekday": "",
+  "last_check_utc": "",
+  "last_status": "init",
+  "consecutive_failures": 0
+}

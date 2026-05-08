@@ -1,0 +1,270 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import re
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
+
+from playwright.async_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    async_playwright,
+    TimeoutError as PlaywrightTimeout,
+)
+from playwright_stealth import stealth_async
+
+from . import captcha
+from .state import Slot
+
+logger = logging.getLogger(__name__)
+
+BASE_URL = "https://konzinfoidopont.mfa.gov.hu"
+CONSULATE_LABEL = "Kazakhstan - Almati"
+CASE_TYPE_LABEL = "Visa application (Schengen visa- type 'C')"
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+)
+DEFAULT_NAV_TIMEOUT_MS = 45_000
+DEBUG_DIR = Path(__file__).resolve().parent.parent / "debug-screenshots"
+
+
+class BookingError(Exception):
+    pass
+
+
+async def find_earliest_slot() -> Slot:
+    async with _stealth_browser() as page:
+        try:
+            await _open_booking_form(page)
+            await _select_consulate(page)
+            await _select_case_type(page)
+            await _fill_personal_data(page)
+            await _tick_consents(page)
+
+            captcha_since = time.time()
+            await _click_select_date(page)
+            await _wait_for_captcha_field(page)
+
+            answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
+            await _fill_captcha(page, answer)
+            await _click_select_date(page)
+
+            slot = await _read_first_slot(page)
+            logger.info("Found earliest slot: %s", slot)
+            return slot
+        except Exception:
+            await _dump_debug(page, "error")
+            raise
+
+
+@asynccontextmanager
+async def _stealth_browser():
+    pw: Playwright
+    browser: Browser
+    context: BrowserContext
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent=USER_AGENT,
+            locale="en-US",
+            timezone_id="Asia/Almaty",
+            viewport={"width": 1366, "height": 900},
+        )
+        context.set_default_navigation_timeout(DEFAULT_NAV_TIMEOUT_MS)
+        context.set_default_timeout(DEFAULT_NAV_TIMEOUT_MS)
+        page = await context.new_page()
+        await stealth_async(page)
+        try:
+            yield page
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def _open_booking_form(page: Page) -> None:
+    await page.goto(BASE_URL, wait_until="domcontentloaded")
+    candidates = [
+        page.get_by_role("link", name=re.compile(r"book.*appointment", re.I)),
+        page.get_by_role("button", name=re.compile(r"book.*appointment", re.I)),
+        page.get_by_text(re.compile(r"i\s*wish\s*to\s*book", re.I)),
+    ]
+    for cand in candidates:
+        try:
+            await cand.first.click(timeout=4000)
+            break
+        except PlaywrightTimeout:
+            continue
+    else:
+        if "/Booking" not in page.url:
+            raise BookingError(f"Couldn't open booking form, still at {page.url}")
+    await page.wait_for_load_state("networkidle")
+
+
+async def _select_consulate(page: Page) -> None:
+    if await _has_text(page, CONSULATE_LABEL):
+        return
+    btn = page.get_by_role("button", name=re.compile(r"select\s*location", re.I))
+    await btn.click()
+    await page.get_by_text(re.compile(re.escape(CONSULATE_LABEL), re.I)).first.click()
+
+
+async def _select_case_type(page: Page) -> None:
+    if await _has_text(page, "Schengen visa"):
+        return
+    btn = page.get_by_role("button", name=re.compile(r"select\s*type\s*of\s*application", re.I))
+    await btn.click()
+    await page.get_by_text(re.compile(r"Schengen\s*visa.*type.*C", re.I)).first.click()
+    add_btn = page.get_by_role("button", name=re.compile(r"^\s*add\s*$", re.I))
+    try:
+        await add_btn.click(timeout=3000)
+    except PlaywrightTimeout:
+        pass
+
+
+async def _fill_personal_data(page: Page) -> None:
+    name = os.environ["APPLICANT_NAME"]
+    dob = os.environ["APPLICANT_DOB"]               # DD/MM/YYYY
+    phone = os.environ["APPLICANT_PHONE"]
+    email = os.environ["APPLICANT_EMAIL"]
+    passport = os.environ["APPLICANT_PASSPORT"]
+
+    await _fill_by_label(page, r"^\s*name\s*$", name)
+    await _fill_by_label(page, r"date\s*of\s*birth", dob)
+    await _fill_by_label(page, r"number\s*of\s*applicants", "1")
+    await _fill_by_label(page, r"phone\s*number", phone)
+    await _fill_by_label(page, r"^\s*email\s*address\s*$", email)
+    await _fill_by_label(page, r"re-?enter\s*the\s*email", email)
+    await _fill_by_label(page, r"passport\s*number", passport)
+
+
+async def _tick_consents(page: Page) -> None:
+    for pattern in [
+        r"i\s*have\s*read\s*and\s*acknowledged",
+        r"i\s*give\s*my\s*consent",
+    ]:
+        cb = page.get_by_role("checkbox", name=re.compile(pattern, re.I))
+        try:
+            if not await cb.is_checked():
+                await cb.check()
+        except PlaywrightTimeout:
+            label = page.get_by_text(re.compile(pattern, re.I)).first
+            await label.click()
+
+
+async def _click_select_date(page: Page) -> None:
+    btn = page.get_by_role("button", name=re.compile(r"select\s*date", re.I))
+    await btn.first.click()
+
+
+async def _wait_for_captcha_field(page: Page, timeout_ms: int = 20_000) -> None:
+    selectors = [
+        'input[placeholder*="Security" i]',
+        'input[name*="captcha" i]',
+        'input[name*="security" i]',
+    ]
+    deadline = asyncio.get_event_loop().time() + timeout_ms / 1000
+    while asyncio.get_event_loop().time() < deadline:
+        for sel in selectors:
+            try:
+                if await page.locator(sel).count():
+                    return
+            except Exception:
+                pass
+        try:
+            await page.get_by_text(re.compile(r"security\s*code", re.I)).first.wait_for(
+                state="visible", timeout=2000
+            )
+            return
+        except PlaywrightTimeout:
+            pass
+    raise BookingError("Captcha field never appeared after Select date click")
+
+
+async def _fill_captcha(page: Page, answer: str) -> None:
+    candidates = [
+        'input[placeholder*="Security" i]',
+        'input[name*="captcha" i]',
+        'input[name*="security" i]',
+    ]
+    for sel in candidates:
+        loc = page.locator(sel)
+        if await loc.count():
+            await loc.first.fill(answer)
+            return
+    raise BookingError("Could not find captcha input field")
+
+
+async def _read_first_slot(page: Page) -> Slot:
+    await page.wait_for_load_state("networkidle")
+    cell_re = re.compile(
+        r"(\d{2}-\d{2}-\d{4})\s*[\r\n ]+([A-Za-z]+)\s*[\r\n ]+(\d{2}:\d{2})"
+    )
+
+    deadline = asyncio.get_event_loop().time() + 15
+    while asyncio.get_event_loop().time() < deadline:
+        text = await page.inner_text("body")
+        m = cell_re.search(text)
+        if m:
+            ddmmyyyy, weekday, hhmm = m.group(1), m.group(2), m.group(3)
+            d, mo, y = ddmmyyyy.split("-")
+            return Slot(date=f"{y}-{mo}-{d}", time=hhmm, weekday=weekday)
+        if "no free" in text.lower() or "no free" in text.lower():
+            raise BookingError("Site reports no free slots")
+        await asyncio.sleep(1)
+
+    raise BookingError("Could not parse any slot from the page")
+
+
+async def _has_text(page: Page, text: str) -> bool:
+    try:
+        return await page.locator(f"text={text}").count() > 0
+    except Exception:
+        return False
+
+
+async def _fill_by_label(page: Page, label_pattern: str, value: str) -> None:
+    rx = re.compile(label_pattern, re.I)
+    try:
+        await page.get_by_label(rx).first.fill(value)
+        return
+    except PlaywrightTimeout:
+        pass
+
+    label_loc = page.get_by_text(rx).first
+    try:
+        await label_loc.wait_for(state="attached", timeout=3000)
+    except PlaywrightTimeout:
+        raise BookingError(f"Label not found: {label_pattern}")
+
+    input_loc = label_loc.locator(
+        "xpath=following::*[self::input or self::textarea][1]"
+    )
+    await input_loc.fill(value)
+
+
+async def _dump_debug(page: Optional[Page], tag: str) -> None:
+    if page is None:
+        return
+    try:
+        DEBUG_DIR.mkdir(exist_ok=True)
+        ts = int(time.time())
+        await page.screenshot(path=str(DEBUG_DIR / f"{tag}-{ts}.png"), full_page=True)
+        html = await page.content()
+        (DEBUG_DIR / f"{tag}-{ts}.html").write_text(html, encoding="utf-8")
+        logger.info("Saved debug artifacts to %s (tag=%s)", DEBUG_DIR, tag)
+    except Exception as e:
+        logger.warning("Failed to save debug artifacts: %s", e)

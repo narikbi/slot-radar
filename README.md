@@ -1,0 +1,105 @@
+# Visa Hungary Almaty — Slot Monitor
+
+Каждый час проверяет [konzinfoidopont.mfa.gov.hu](https://konzinfoidopont.mfa.gov.hu) и шлёт в Telegram уведомление, если появился слот **раньше** уже зафиксированного.
+
+## Как это работает
+
+1. GitHub Actions запускает скрипт раз в час (`cron: "0 * * * *"`).
+2. Playwright (headless Chromium со stealth-патчем) открывает сайт, заполняет форму данными заявителя и нажимает «Select date».
+3. Сайт высылает на Gmail письмо с картинкой арифметической капчи.
+4. Скрипт по IMAP вытаскивает картинку из письма, шлёт её в **Claude Sonnet 4.6** (vision), получает ответ-число.
+5. Вводит число обратно на сайт, видит таблицу слотов, парсит первую ячейку (она всегда самая ранняя).
+6. Сравнивает с `state.json`. Если новая дата раньше — шлёт сообщение в Telegram и коммитит обновлённый `state.json` обратно в репо.
+7. Captcha-письмо удаляется из Gmail сразу после обработки, чтобы не забивать inbox.
+
+## One-time setup
+
+### 1. Сделай репозиторий приватным
+
+В нём окажутся ФИО, паспорт и телефон через secrets. Использовать только приватный репо.
+
+### 2. Gmail App Password
+
+- На [myaccount.google.com](https://myaccount.google.com) включи 2FA (если ещё нет).
+- Зайди на [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+- Создай пароль для "Mail" → скопируй 16 символов **без пробелов**.
+
+### 3. Telegram-бот
+
+- Открой [@BotFather](https://t.me/BotFather), команда `/newbot`. Получи токен (`123456:ABC-DEF...`).
+- Найди созданного бота, нажми Start.
+- Открой `https://api.telegram.org/bot<TOKEN>/getUpdates` в браузере — увидишь `chat.id` (число), это и есть `TELEGRAM_CHAT_ID`.
+
+### 4. Anthropic API key
+
+- [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key.
+- В Billing зачисли минимум $5. Расход ~$0.001 на проверку × 24/день = ~$1/мес.
+
+### 5. Добавь secrets в репозиторий
+
+Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Имя | Значение |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | `sk-ant-api03-...` |
+| `GMAIL_USER` | `<your_email>@gmail.com` (тот же, что в форме!) |
+| `GMAIL_APP_PASSWORD` | 16-значный пароль приложения |
+| `TELEGRAM_BOT_TOKEN` | `123456:ABC-...` |
+| `TELEGRAM_CHAT_ID` | число из getUpdates |
+| `APPLICANT_NAME` | `<First Last>` |
+| `APPLICANT_DOB` | `<DD/MM/YYYY>` (DD/MM/YYYY) |
+| `APPLICANT_PHONE` | `<+phone>` |
+| `APPLICANT_EMAIL` | `<your_email>@gmail.com` (как в Gmail) |
+| `APPLICANT_PASSPORT` | `<passport_number>` |
+
+### 6. Проверь, что `state.json` инициализирован
+
+В репо должен лежать `state.json` с `"earliest_slot_date": "9999-12-31"` — он уже создан в этом коммите, ничего не делай.
+
+### 7. Запусти первый прогон вручную
+
+GitHub → **Actions → check-slot → Run workflow**. Открой логи, должно быть:
+
+```
+Captcha solved: 21
+Found earliest slot: Slot(date='2026-06-22', time='10:00', weekday='Monday')
+First real check — establishing baseline ...
+```
+
+В Telegram придёт первое сообщение «первый зафиксированный слот: 22-06-2026». Гmail-письмо с капчей удалится автоматически.
+
+После этого крон запустится сам в начале каждого часа (плюс случайный джиттер 0–9 минут).
+
+## Локальный запуск (для отладки)
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+export ANTHROPIC_API_KEY=...
+export GMAIL_USER=...
+# и так далее (см. таблицу выше)
+python -m src.main
+```
+
+При ошибке скрипт сохраняет скриншот и HTML страницы в `debug-screenshots/`.
+
+## Что ломается чаще всего
+
+| Симптом | Что делать |
+| --- | --- |
+| `Captcha field never appeared` | Сайт изменил CSS-селекторы. Открой `debug-screenshots/error-*.html`, посмотри атрибуты поля и поправь `_wait_for_captcha_field` в `src/booking.py`. |
+| `No captcha email arrived within 90s` | Проверь `GMAIL_APP_PASSWORD`. Возможно отвалился из-за ротации, перевыпусти. |
+| `Claude returned non-numeric answer` | Промпт капчи поменялся. Глянь картинку в logs (если включишь `logger.debug`) и поправь `_solve_arithmetic`. |
+| `Could not parse any slot from the page` | Изменилась разметка таблицы слотов. Поправь регекспу в `_read_first_slot`. |
+| reCAPTCHA блокирует браузер | В логах будет ошибка ~ "I'm not a robot". Поднять `playwright-stealth` или добавить 2captcha fallback. |
+
+## Где смотреть логи
+
+- **Текущий прогон**: Actions → последний run → check-slot → шаг "Run slot check".
+- **История изменений `state.json`**: вкладка Commits — все обновления делает бот `slot-bot`.
+- **Скриншоты ошибок**: на упавшем run → Artifacts → `debug-<run-id>.zip`.
+
+## Отключить мониторинг
+
+Repo → Actions → check-slot → ⋯ → **Disable workflow**.
