@@ -2,7 +2,7 @@
   "earliest_slot_date": "9999-12-31",
   "earliest_slot_time": "00:00",
   "earliest_slot_weekday": "",
-  "last_check_utc": "2026-05-09T21:34:12Z",
-  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for get_by_role(\"button\", name=re.compile(r\"select\\s*type\\s*of\\s*application\", re.IGNORECASE))\n",
-  "consecutive_failures": 17
+  "last_check_utc": "2026-05-09T21:39:18Z",
+  "last_status": "fail: TimeoutError: Locator.wait_for: Timeout 10000ms exceeded.\nCall log:\nwaiting for locator(\"#modal2\").locator(\".modal-footer button.btn-success\") to be visible\n",
+  "consecutive_failures": 18
 }
