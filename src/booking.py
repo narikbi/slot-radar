@@ -54,6 +54,7 @@ async def find_earliest_slot() -> Slot:
             answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
             await _fill_captcha(page, answer)
             await _click_select_date(page)
+            await _dismiss_modals(page)
 
             slot = await _read_first_slot(page)
             logger.info("Found earliest slot: %s", slot)
@@ -254,15 +255,7 @@ async def _click_select_date(page: Page) -> None:
 
 
 async def _wait_for_captcha_field(page: Page, timeout_ms: int = 20_000) -> None:
-    # The site shows a modal popup ("you need to enter the code...") AFTER first Select date
-    # click. Dismiss it so it doesn't block subsequent interactions.
-    try:
-        await page.locator(".modal.show").locator("button.btn-success, button.btn-primary").first.click(
-            timeout=2000
-        )
-    except PlaywrightTimeout:
-        pass
-
+    await _dismiss_modals(page)
     label = page.locator(
         "label.col-form-label",
         has_text=re.compile(r"security\s*code", re.I),
@@ -271,6 +264,7 @@ async def _wait_for_captcha_field(page: Page, timeout_ms: int = 20_000) -> None:
 
 
 async def _fill_captcha(page: Page, answer: str) -> None:
+    await _dismiss_modals(page)
     captcha_input = _captcha_input_locator(page)
     if not await captcha_input.count():
         raise BookingError("Could not find captcha input field")
@@ -284,6 +278,23 @@ def _captcha_input_locator(page: Page):
         has_text=re.compile(r"security\s*code", re.I),
     )
     return label.locator("xpath=following::input[1]")
+
+
+async def _dismiss_modals(page: Page) -> None:
+    """Close any visible Bootstrap notification modal (e.g. 'check your mailbox' popup)."""
+    deadline = asyncio.get_event_loop().time() + 8
+    while asyncio.get_event_loop().time() < deadline:
+        modal = page.locator(".modal.show")
+        if await modal.count() == 0:
+            return
+        try:
+            ok_btn = modal.locator(
+                "button.btn-primary, button.btn-success"
+            ).first
+            await ok_btn.click(timeout=2000)
+            await modal.first.wait_for(state="hidden", timeout=4000)
+        except PlaywrightTimeout:
+            await asyncio.sleep(0.5)
 
 
 async def _read_first_slot(page: Page) -> Slot:
