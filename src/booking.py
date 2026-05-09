@@ -254,41 +254,36 @@ async def _click_select_date(page: Page) -> None:
 
 
 async def _wait_for_captcha_field(page: Page, timeout_ms: int = 20_000) -> None:
-    selectors = [
-        'input[placeholder*="Security" i]',
-        'input[name*="captcha" i]',
-        'input[name*="security" i]',
-    ]
-    deadline = asyncio.get_event_loop().time() + timeout_ms / 1000
-    while asyncio.get_event_loop().time() < deadline:
-        for sel in selectors:
-            try:
-                if await page.locator(sel).count():
-                    return
-            except Exception:
-                pass
-        try:
-            await page.get_by_text(re.compile(r"security\s*code", re.I)).first.wait_for(
-                state="visible", timeout=2000
-            )
-            return
-        except PlaywrightTimeout:
-            pass
-    raise BookingError("Captcha field never appeared after Select date click")
+    # The site shows a modal popup ("you need to enter the code...") AFTER first Select date
+    # click. Dismiss it so it doesn't block subsequent interactions.
+    try:
+        await page.locator(".modal.show").locator("button.btn-success, button.btn-primary").first.click(
+            timeout=2000
+        )
+    except PlaywrightTimeout:
+        pass
+
+    label = page.locator(
+        "label.col-form-label",
+        has_text=re.compile(r"security\s*code", re.I),
+    )
+    await label.first.wait_for(state="visible", timeout=timeout_ms)
 
 
 async def _fill_captcha(page: Page, answer: str) -> None:
-    candidates = [
-        'input[placeholder*="Security" i]',
-        'input[name*="captcha" i]',
-        'input[name*="security" i]',
-    ]
-    for sel in candidates:
-        loc = page.locator(sel)
-        if await loc.count():
-            await loc.first.fill(answer)
-            return
-    raise BookingError("Could not find captcha input field")
+    captcha_input = _captcha_input_locator(page)
+    if not await captcha_input.count():
+        raise BookingError("Could not find captcha input field")
+    await captcha_input.first.click()
+    await captcha_input.first.fill(answer)
+
+
+def _captcha_input_locator(page: Page):
+    label = page.locator(
+        "label.col-form-label",
+        has_text=re.compile(r"security\s*code", re.I),
+    )
+    return label.locator("xpath=following::input[1]")
 
 
 async def _read_first_slot(page: Page) -> Slot:
