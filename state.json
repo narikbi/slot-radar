@@ -2,7 +2,7 @@
   "earliest_slot_date": "9999-12-31",
   "earliest_slot_time": "00:00",
   "earliest_slot_weekday": "",
-  "last_check_utc": "2026-05-09T17:10:53Z",
+  "last_check_utc": "2026-05-09T19:15:21Z",
   "last_status": "fail: BookingError: Couldn't open booking form, still at https://konzinfoidopont.mfa.gov.hu/",
-  "consecutive_failures": 10
+  "consecutive_failures": 11
 }
