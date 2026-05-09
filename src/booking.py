@@ -54,6 +54,7 @@ async def find_earliest_slot() -> Slot:
             answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
             await _fill_captcha(page, answer)
             await _click_select_date(page)
+            await _check_for_incorrect_code(page)
             await _dismiss_modals(page)
 
             slot = await _read_first_slot(page)
@@ -278,6 +279,24 @@ def _captcha_input_locator(page: Page):
         has_text=re.compile(r"security\s*code", re.I),
     )
     return label.locator("xpath=following::input[1]")
+
+
+async def _check_for_incorrect_code(page: Page) -> None:
+    """If the site rejected our captcha answer, abort early.
+
+    The consulate locks out the email/passport after 3 wrong attempts in a row,
+    so we MUST NOT retry within the same run. Wait for next cron tick instead.
+    """
+    try:
+        await page.locator(".modal.show").locator(
+            "text=/incorrect|invalid|wrong|hib|érvénytelen|hibás/i"
+        ).first.wait_for(state="visible", timeout=4000)
+        raise BookingError(
+            "Captcha was rejected by site (Incorrect code). "
+            "Aborting to preserve attempts (3 wrong = lockout)."
+        )
+    except PlaywrightTimeout:
+        return  # No error modal — captcha was accepted
 
 
 async def _dismiss_modals(page: Page) -> None:

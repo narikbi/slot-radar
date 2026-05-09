@@ -190,7 +190,15 @@ def _solve_arithmetic(image_bytes: bytes, mime: str) -> str:
             "key": api_key,
             "method": "base64",
             "body": b64,
+            "numeric": 1,
             "math": 1,
+            "min_len": 1,
+            "max_len": 3,
+            "textinstructions": (
+                "The image shows the same arithmetic expression repeated 2-3 times "
+                "with heavy noise (lines, dots). The expression adds small digits "
+                "like 8+6+2. Compute the SUM and return only the integer result."
+            ),
             "json": 1,
         },
         timeout=30,
