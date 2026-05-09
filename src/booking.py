@@ -167,24 +167,39 @@ async def _switch_to_english(page: Page) -> None:
 
 
 async def _select_consulate(page: Page) -> None:
-    if await _has_text(page, CONSULATE_LABEL):
-        return
-    btn = page.get_by_role("button", name=re.compile(r"select\s*location", re.I))
-    await btn.click()
-    await page.get_by_text(re.compile(re.escape(CONSULATE_LABEL), re.I)).first.click()
+    await page.locator('button[data-target="#modal2"]').first.click()
+    modal = page.locator("#modal2")
+    save_btn = modal.locator(".modal-footer button.btn-success")
+    await save_btn.wait_for(state="visible", timeout=10_000)
+
+    label = modal.locator(
+        "label.form-check-label",
+        has_text=re.compile(re.escape(CONSULATE_LABEL), re.I),
+    )
+    await label.first.click()
+    await save_btn.click()
+
+    await page.get_by_text(re.compile(r"selected\s*consulate", re.I)).first.wait_for(
+        state="visible", timeout=15_000
+    )
 
 
 async def _select_case_type(page: Page) -> None:
-    if await _has_text(page, "Schengen visa"):
-        return
-    btn = page.get_by_role("button", name=re.compile(r"select\s*type\s*of\s*application", re.I))
-    await btn.click()
-    await page.get_by_text(re.compile(r"Schengen\s*visa.*type.*C", re.I)).first.click()
-    add_btn = page.get_by_role("button", name=re.compile(r"^\s*add\s*$", re.I))
-    try:
-        await add_btn.click(timeout=3000)
-    except PlaywrightTimeout:
-        pass
+    await page.locator('button[data-target="#modalCases"]').first.click()
+    modal = page.locator("#modalCases")
+    save_btn = modal.locator(".modal-footer button.btn-success")
+    await save_btn.wait_for(state="visible", timeout=10_000)
+
+    label = modal.locator(
+        "label.form-check-label",
+        has_text=re.compile(r"Schengen\s*visa.*type.*C", re.I),
+    )
+    await label.first.click()
+    await save_btn.click()
+
+    await page.get_by_text(re.compile(r"selected\s*case\s*types", re.I)).first.wait_for(
+        state="visible", timeout=15_000
+    )
 
 
 async def _fill_personal_data(page: Page) -> None:
@@ -195,10 +210,21 @@ async def _fill_personal_data(page: Page) -> None:
     passport = os.environ["APPLICANT_PASSPORT"]
 
     await _fill_by_label(page, r"^\s*name\s*$", name)
-    await _fill_by_label(page, r"date\s*of\s*birth", dob)
-    await _fill_by_label(page, r"number\s*of\s*applicants", "1")
+
+    # DOB uses Duet date picker custom element with input id="birthDate".
+    # Use type+Tab so the JS framework's input/blur bindings fire.
+    dob_input = page.locator("#birthDate")
+    await dob_input.click()
+    await dob_input.fill("")
+    await dob_input.type(dob, delay=30)
+    await dob_input.press("Tab")
+
+    try:
+        await _fill_by_label(page, r"number\s*of\s*applicants", "1")
+    except BookingError:
+        pass  # field may be pre-filled or not present
     await _fill_by_label(page, r"phone\s*number", phone)
-    await _fill_by_label(page, r"^\s*email\s*address\s*$", email)
+    await _fill_by_label(page, r"^\s*e-?mail\s*address\s*$", email)
     await _fill_by_label(page, r"re-?enter\s*the\s*email", email)
     await _fill_by_label(page, r"passport\s*number", passport)
 
