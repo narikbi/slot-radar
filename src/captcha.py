@@ -134,21 +134,49 @@ def _extract_image(msg: email.message.Message) -> tuple[Optional[bytes], str]:
 
     for part in msg.walk():
         if part.get_content_type() == "text/html":
-            html = part.get_payload(decode=True)
-            if not html:
+            html_bytes = part.get_payload(decode=True)
+            if not html_bytes:
                 continue
-            if isinstance(html, bytes):
-                html = html.decode(part.get_content_charset() or "utf-8", errors="replace")
+            html = html_bytes.decode(
+                part.get_content_charset() or "utf-8", errors="replace"
+            )
+
             m = re.search(
                 r'src="data:(image/[a-zA-Z+]+);base64,([A-Za-z0-9+/=]+)"',
                 html,
             )
             if m:
-                mime = m.group(1)
-                b = base64.b64decode(m.group(2))
-                return b, mime
+                return base64.b64decode(m.group(2)), m.group(1)
+
+            url = _find_captcha_url(html)
+            if url:
+                logger.info("Downloading captcha from %s", url)
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                ctype_hdr = resp.headers.get("Content-Type", "").split(";")[0].strip()
+                if not ctype_hdr or not ctype_hdr.startswith("image/"):
+                    ctype_hdr = "image/jpeg"
+                return resp.content, ctype_hdr
 
     return None, ""
+
+
+def _find_captcha_url(html: str) -> Optional[str]:
+    """Find the captcha image URL inside the email HTML.
+
+    Captcha emails embed `<img src="https://konzinfoidopont.mfa.gov.hu/qrcode/api/qr?id=...">`
+    with `alt="Captcha Code"`. Header logo also points to /qrcode/api/qr?id=hu — exclude it.
+    """
+    for match in re.finditer(r'<img\b[^>]*\bsrc="([^"]+)"[^>]*>', html, re.I):
+        tag = match.group(0)
+        src = match.group(1)
+        if "captcha" in tag.lower() and "qrcode/api/qr" in src:
+            return src
+    for match in re.finditer(r'<img\b[^>]*\bsrc="([^"]+)"', html, re.I):
+        src = match.group(1)
+        if "qrcode/api/qr" in src and "id=hu" not in src:
+            return src
+    return None
 
 
 def _solve_arithmetic(image_bytes: bytes, mime: str) -> str:
