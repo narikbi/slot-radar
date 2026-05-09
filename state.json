@@ -2,7 +2,7 @@
   "earliest_slot_date": "9999-12-31",
   "earliest_slot_time": "00:00",
   "earliest_slot_weekday": "",
-  "last_check_utc": "2026-05-09T22:10:49Z",
-  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for locator(\"label.col-form-label\").filter(has_text=re.compile(r\"security\\s*code\", re.IGNORECASE)).locator(\"xpath=followi",
-  "consecutive_failures": 23
+  "last_check_utc": "2026-05-09T22:15:26Z",
+  "last_status": "fail: BookingError: Could not parse any slot from the page",
+  "consecutive_failures": 24
 }
