@@ -89,6 +89,7 @@ async def _stealth_browser():
             locale="en-US",
             timezone_id="Asia/Almaty",
             viewport={"width": 1366, "height": 900},
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
         context.set_default_navigation_timeout(DEFAULT_NAV_TIMEOUT_MS)
         context.set_default_timeout(DEFAULT_NAV_TIMEOUT_MS)
@@ -121,6 +122,8 @@ async def _open_booking_form(page: Page) -> None:
         timeout=90_000,
     )
 
+    await _switch_to_english(page)
+
     if await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).count():
         return
     if await page.get_by_text(re.compile(r"i\s*wish\s*to\s*book", re.I)).count():
@@ -139,6 +142,27 @@ async def _open_booking_form(page: Page) -> None:
     raise BookingError(
         f"Booking form not found, page text starts with: "
         f"{(await page.inner_text('body'))[:300]!r}"
+    )
+
+
+async def _switch_to_english(page: Page) -> None:
+    """Click the language dropdown and pick English if the page renders in Hungarian."""
+    if await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).count():
+        return
+
+    try:
+        await page.locator("#langSelector").click(timeout=5000)
+    except PlaywrightTimeout:
+        logger.warning("Language switcher #langSelector not found — page may already be English")
+        return
+
+    english_link = page.locator(".dropdown-menu.language a", has_text=re.compile(r"english", re.I))
+    if not await english_link.count():
+        english_link = page.get_by_role("link", name=re.compile(r"^\s*english\s*$", re.I))
+    await english_link.first.click(timeout=5000)
+
+    await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).first.wait_for(
+        state="visible", timeout=15_000
     )
 
 
