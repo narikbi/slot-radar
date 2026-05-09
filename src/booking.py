@@ -64,11 +64,18 @@ async def find_earliest_slot() -> Slot:
             raise
 
 
+_console_log: list[str] = []
+_failed_requests: list[str] = []
+
+
 @asynccontextmanager
 async def _stealth_browser():
     pw: Playwright
     browser: Browser
     context: BrowserContext
+
+    _console_log.clear()
+    _failed_requests.clear()
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -87,6 +94,12 @@ async def _stealth_browser():
         context.set_default_navigation_timeout(DEFAULT_NAV_TIMEOUT_MS)
         context.set_default_timeout(DEFAULT_NAV_TIMEOUT_MS)
         page = await context.new_page()
+        page.on("console", lambda m: _console_log.append(f"[{m.type}] {m.text}"))
+        page.on("pageerror", lambda e: _console_log.append(f"[pageerror] {e}"))
+        page.on(
+            "requestfailed",
+            lambda r: _failed_requests.append(f"{r.method} {r.url} -> {r.failure}"),
+        )
         await stealth_async(page)
         try:
             yield page
@@ -287,6 +300,21 @@ async def _dump_debug(page: Optional[Page], tag: str) -> None:
             (DEBUG_DIR / f"{tag}-{ts}.txt").write_text(text, encoding="utf-8")
         except Exception:
             pass
+        try:
+            app_html = await page.evaluate(
+                "() => { const a = document.querySelector('app'); return a ? a.innerHTML : '<no app element>'; }"
+            )
+            (DEBUG_DIR / f"{tag}-{ts}.app.html").write_text(app_html, encoding="utf-8")
+        except Exception:
+            pass
+        if _console_log:
+            (DEBUG_DIR / f"{tag}-{ts}.console.log").write_text(
+                "\n".join(_console_log), encoding="utf-8"
+            )
+        if _failed_requests:
+            (DEBUG_DIR / f"{tag}-{ts}.failed-requests.log").write_text(
+                "\n".join(_failed_requests), encoding="utf-8"
+            )
         logger.info("Saved debug artifacts to %s (tag=%s)", DEBUG_DIR, tag)
     except Exception as e:
         logger.warning("Failed to save debug artifacts: %s", e)
