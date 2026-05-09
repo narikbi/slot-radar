@@ -96,22 +96,39 @@ async def _stealth_browser():
 
 
 async def _open_booking_form(page: Page) -> None:
-    await page.goto(BASE_URL, wait_until="domcontentloaded")
-    candidates = [
-        page.get_by_role("link", name=re.compile(r"book.*appointment", re.I)),
-        page.get_by_role("button", name=re.compile(r"book.*appointment", re.I)),
-        page.get_by_text(re.compile(r"i\s*wish\s*to\s*book", re.I)),
-    ]
-    for cand in candidates:
-        try:
-            await cand.first.click(timeout=4000)
-            break
-        except PlaywrightTimeout:
-            continue
-    else:
-        if "/Booking" not in page.url:
-            raise BookingError(f"Couldn't open booking form, still at {page.url}")
-    await page.wait_for_load_state("networkidle")
+    # Blazor WebAssembly app: <body> starts as `<app>Loading...</app>` and the real
+    # DOM is rendered client-side after a bunch of .wasm/.dll files download.
+    await page.goto(BASE_URL)
+    await page.wait_for_load_state("networkidle", timeout=90_000)
+    await page.wait_for_function(
+        """() => {
+            const el = document.querySelector('app');
+            if (!el) return false;
+            const txt = (el.innerText || '').trim().toLowerCase();
+            return el.children.length > 0 && txt && !txt.startsWith('loading');
+        }""",
+        timeout=90_000,
+    )
+
+    if await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).count():
+        return
+    if await page.get_by_text(re.compile(r"i\s*wish\s*to\s*book", re.I)).count():
+        if not await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).count():
+            try:
+                await page.get_by_role("link", name=re.compile(r"book.*appointment", re.I)).first.click(timeout=3000)
+            except PlaywrightTimeout:
+                try:
+                    await page.get_by_text(re.compile(r"i\s*wish\s*to\s*book", re.I)).first.click(timeout=3000)
+                except PlaywrightTimeout:
+                    pass
+            await page.wait_for_load_state("networkidle", timeout=30_000)
+            if await page.get_by_text(re.compile(r"please\s*select\s*a\s*consulate", re.I)).count():
+                return
+
+    raise BookingError(
+        f"Booking form not found, page text starts with: "
+        f"{(await page.inner_text('body'))[:300]!r}"
+    )
 
 
 async def _select_consulate(page: Page) -> None:
@@ -265,6 +282,11 @@ async def _dump_debug(page: Optional[Page], tag: str) -> None:
         await page.screenshot(path=str(DEBUG_DIR / f"{tag}-{ts}.png"), full_page=True)
         html = await page.content()
         (DEBUG_DIR / f"{tag}-{ts}.html").write_text(html, encoding="utf-8")
+        try:
+            text = await page.inner_text("body")
+            (DEBUG_DIR / f"{tag}-{ts}.txt").write_text(text, encoding="utf-8")
+        except Exception:
+            pass
         logger.info("Saved debug artifacts to %s (tag=%s)", DEBUG_DIR, tag)
     except Exception as e:
         logger.warning("Failed to save debug artifacts: %s", e)
