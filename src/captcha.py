@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import email
 import email.message
 import imaplib
@@ -57,8 +58,15 @@ def _fetch_captcha_image(since_epoch: float) -> tuple[bytes, str, bytes, imaplib
             mailbox.login(user, pw)
             mailbox.select("INBOX")
 
+            # Don't filter by UNSEEN: this Gmail account auto-flags all mfa.gov.hu mail
+            # as \Seen on arrival (likely a filter rule), so UNSEEN search returns nothing.
+            # Narrow to today via SINCE then date-match the Date header in Python.
+            since_dt = datetime.datetime.fromtimestamp(
+                since_epoch - 86400, tz=datetime.timezone.utc
+            )
+            since_str = since_dt.strftime("%d-%b-%Y")
             typ, data = mailbox.uid(
-                "SEARCH", None, f'(FROM "{SENDER}" UNSEEN)'
+                "SEARCH", None, f'(FROM "{SENDER}" SINCE "{since_str}")'
             )
             if typ != "OK":
                 raise CaptchaError(f"IMAP SEARCH failed: {typ}")
@@ -73,8 +81,9 @@ def _fetch_captcha_image(since_epoch: float) -> tuple[bytes, str, bytes, imaplib
 
                 date_tuple = email.utils.parsedate_tz(msg.get("Date", ""))
                 msg_epoch = email.utils.mktime_tz(date_tuple) if date_tuple else 0
-                if msg_epoch + 5 < since_epoch:
-                    continue
+                if msg_epoch + 60 < since_epoch:
+                    # Older than our submission (with 60s clock-skew tolerance) — stop scanning.
+                    break
                 subject = (msg.get("Subject") or "")
                 if SUBJECT_KEYWORD.lower() not in subject.lower():
                     continue
