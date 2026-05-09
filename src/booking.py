@@ -167,34 +167,39 @@ async def _switch_to_english(page: Page) -> None:
 
 
 async def _select_consulate(page: Page) -> None:
+    # modal2 has no Save button — clicking a radio auto-applies; we then close it.
     await page.locator('button[data-target="#modal2"]').first.click()
     modal = page.locator("#modal2")
-    save_btn = modal.locator(".modal-footer button.btn-success")
-    await save_btn.wait_for(state="visible", timeout=10_000)
-
     label = modal.locator(
         "label.form-check-label",
         has_text=re.compile(re.escape(CONSULATE_LABEL), re.I),
     )
+    await label.first.wait_for(state="visible", timeout=10_000)
     await label.first.click()
-    await save_btn.click()
 
-    await page.get_by_text(re.compile(r"selected\s*consulate", re.I)).first.wait_for(
-        state="visible", timeout=15_000
-    )
+    try:
+        await page.get_by_text(re.compile(r"selected\s*consulate", re.I)).first.wait_for(
+            state="visible", timeout=8_000
+        )
+    except PlaywrightTimeout:
+        await modal.locator("button.close").first.click(timeout=3000)
+        await page.get_by_text(re.compile(r"selected\s*consulate", re.I)).first.wait_for(
+            state="visible", timeout=10_000
+        )
 
 
 async def _select_case_type(page: Page) -> None:
+    # modalCases has a Save button.
     await page.locator('button[data-target="#modalCases"]').first.click()
     modal = page.locator("#modalCases")
-    save_btn = modal.locator(".modal-footer button.btn-success")
-    await save_btn.wait_for(state="visible", timeout=10_000)
-
     label = modal.locator(
         "label.form-check-label",
         has_text=re.compile(r"Schengen\s*visa.*type.*C", re.I),
     )
+    await label.first.wait_for(state="visible", timeout=10_000)
     await label.first.click()
+
+    save_btn = modal.locator("button.btn-success", has_text=re.compile(r"^\s*save\s*$", re.I))
     await save_btn.click()
 
     await page.get_by_text(re.compile(r"selected\s*case\s*types", re.I)).first.wait_for(
