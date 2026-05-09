@@ -2,7 +2,7 @@
   "earliest_slot_date": "9999-12-31",
   "earliest_slot_time": "00:00",
   "earliest_slot_weekday": "",
-  "last_check_utc": "2026-05-09T21:55:56Z",
+  "last_check_utc": "2026-05-09T22:02:02Z",
   "last_status": "fail: CaptchaError: No captcha email arrived within 90s (last err: None)",
-  "consecutive_failures": 20
+  "consecutive_failures": 21
 }
