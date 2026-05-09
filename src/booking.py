@@ -17,7 +17,6 @@ from playwright.async_api import (
     async_playwright,
     TimeoutError as PlaywrightTimeout,
 )
-from playwright_stealth import stealth_async
 
 from . import captcha
 from .state import Slot
@@ -100,7 +99,6 @@ async def _stealth_browser():
             "requestfailed",
             lambda r: _failed_requests.append(f"{r.method} {r.url} -> {r.failure}"),
         )
-        await stealth_async(page)
         try:
             yield page
         finally:
