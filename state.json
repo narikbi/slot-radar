@@ -2,7 +2,7 @@
   "earliest_slot_date": "9999-12-31",
   "earliest_slot_time": "00:00",
   "earliest_slot_weekday": "",
-  "last_check_utc": "2026-05-09T21:30:31Z",
-  "last_status": "fail: BookingError: Booking form not found, page text starts with: 'Külgazdasági és Külügyminisztérium\\nKonzinfo Időpont\\n Nyelv \\nOnline időpontfoglalás konzuli ügyintézésre\\nFONTOS TUDNIVALÓK\\nKérjü",
-  "consecutive_failures": 16
+  "last_check_utc": "2026-05-09T21:34:12Z",
+  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for get_by_role(\"button\", name=re.compile(r\"select\\s*type\\s*of\\s*application\", re.IGNORECASE))\n",
+  "consecutive_failures": 17
 }
