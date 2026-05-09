@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import email
+import email.header
 import email.message
 import imaplib
 import logging
@@ -84,7 +85,7 @@ def _fetch_captcha_image(since_epoch: float) -> tuple[bytes, str, bytes, imaplib
                 if msg_epoch + 60 < since_epoch:
                     # Older than our submission (with 60s clock-skew tolerance) — stop scanning.
                     break
-                subject = (msg.get("Subject") or "")
+                subject = _decode_header(msg.get("Subject") or "")
                 if SUBJECT_KEYWORD.lower() not in subject.lower():
                     continue
 
@@ -106,6 +107,21 @@ def _fetch_captcha_image(since_epoch: float) -> tuple[bytes, str, bytes, imaplib
         f"No captcha email arrived within {POLL_TIMEOUT_SEC}s "
         f"(last err: {last_err})"
     )
+
+
+def _decode_header(raw: str) -> str:
+    """Decode an RFC 2047 encoded header (e.g. =?utf-8?B?...?=) to plain unicode."""
+    try:
+        parts = email.header.decode_header(raw)
+        chunks = []
+        for chunk, enc in parts:
+            if isinstance(chunk, bytes):
+                chunks.append(chunk.decode(enc or "utf-8", errors="replace"))
+            else:
+                chunks.append(chunk)
+        return "".join(chunks)
+    except Exception:
+        return raw
 
 
 def _extract_image(msg: email.message.Message) -> tuple[Optional[bytes], str]:
