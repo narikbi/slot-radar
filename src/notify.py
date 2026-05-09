@@ -33,6 +33,18 @@ def send_first_slot(new: Slot) -> None:
     _send(text)
 
 
+def send_slot_moved_later(prev: Slot, new: Slot) -> None:
+    days_later = _days_between(prev.date, new.date)
+    text = (
+        "🟡 <b>Венгрия / Алматы — слот ушёл</b>\n"
+        f"Был:        {escape(prev.date)} {escape(prev.weekday)} {escape(prev.time)}\n"
+        f"Теперь самая ранняя: <b>{escape(new.date)} {escape(new.weekday)} {escape(new.time)}</b>"
+        f" (на {days_later} дней позже)\n\n"
+        f"Бронируй пока эту: {BOOKING_URL}"
+    )
+    _send(text)
+
+
 def send_monitor_broken(failures: int, reason: str) -> None:
     text = (
         "⚠️ <b>Visa monitor сломался</b>\n"

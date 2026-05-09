@@ -42,14 +42,19 @@ async def run() -> int:
         state.save(s)
         return 0
 
-    if s.is_earlier(slot):
+    if slot.date < prev_slot.date:
         logger.info("Earlier slot found: %s -> %s", prev_slot, slot)
         notify.send_earlier_slot(prev_slot, slot)
-        s = state.update_with_slot(s, slot)
+    elif slot.date > prev_slot.date:
+        logger.info("Slot moved later (taken?): %s -> %s", prev_slot, slot)
+        notify.send_slot_moved_later(prev_slot, slot)
     else:
-        logger.info("No earlier slot. Current=%s, Found=%s", prev_slot, slot)
-        s = state.mark_success(s)
+        logger.info("Same earliest slot: %s", slot)
 
+    # Always sync stored state to current observation so future comparisons
+    # reflect reality (e.g., if today's slot is taken, tomorrow we compare
+    # against the new actual earliest, not the stale historical peak).
+    s = state.update_with_slot(s, slot)
     state.save(s)
     return 0
 
