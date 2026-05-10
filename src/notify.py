@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import json
+import logging
 import os
 from datetime import date, datetime
 from html import escape
+from pathlib import Path
 
 import requests
 
 from .state import Slot, State
 
+logger = logging.getLogger(__name__)
+
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+TELEGRAM_GET_UPDATES = "https://api.telegram.org/bot{token}/getUpdates"
 BOOKING_URL = "https://konzinfoidopont.mfa.gov.hu"
+CHAT_IDS_PATH = Path(__file__).resolve().parent.parent / "chat_ids.json"
 
 
 def send_earlier_slot(prev: Slot, new: Slot) -> None:
@@ -57,18 +64,105 @@ def send_monitor_broken(failures: int, reason: str) -> None:
 
 def _send(html_text: str) -> None:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    resp = requests.post(
-        TELEGRAM_API.format(token=token),
-        json={
-            "chat_id": chat_id,
-            "text": html_text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        },
-        timeout=15,
+    chat_ids = _resolve_chat_ids(token)
+    if not chat_ids:
+        raise RuntimeError(
+            "No Telegram chat_ids known. Tell each recipient to send /start to the bot first."
+        )
+
+    pruned: set[int] = set()
+    for chat_id in chat_ids:
+        try:
+            resp = requests.post(
+                TELEGRAM_API.format(token=token),
+                json={
+                    "chat_id": chat_id,
+                    "text": html_text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                },
+                timeout=15,
+            )
+            if resp.status_code in (400, 403):
+                logger.warning(
+                    "Removing dead chat_id %s (status %d): %s",
+                    chat_id, resp.status_code, resp.text[:200],
+                )
+                pruned.add(chat_id)
+            else:
+                resp.raise_for_status()
+        except Exception as e:
+            logger.warning("Send to %s failed: %s", chat_id, e)
+
+    if pruned:
+        remaining = set(chat_ids) - pruned
+        _save_chat_ids(remaining)
+
+
+def _resolve_chat_ids(token: str) -> list[int]:
+    """Return all Telegram chat_ids the bot should notify.
+
+    Sources merged together:
+    - chat_ids.json in the repo (persisted across runs)
+    - Live Telegram getUpdates (anyone who recently messaged the bot)
+    - TELEGRAM_CHAT_ID env var (legacy fallback)
+    The merged set is saved back to chat_ids.json.
+    """
+    known = _load_chat_ids()
+    discovered = _discover_chat_ids(token)
+    env_fallback = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if env_fallback.lstrip("-").isdigit():
+        discovered.add(int(env_fallback))
+
+    merged = known | discovered
+    if merged != known:
+        _save_chat_ids(merged)
+    return sorted(merged)
+
+
+def _load_chat_ids() -> set[int]:
+    if not CHAT_IDS_PATH.exists():
+        return set()
+    try:
+        data = json.loads(CHAT_IDS_PATH.read_text())
+        return {int(x) for x in data.get("chat_ids", [])}
+    except Exception as e:
+        logger.warning("Failed to read chat_ids.json: %s", e)
+        return set()
+
+
+def _save_chat_ids(ids: set[int]) -> None:
+    CHAT_IDS_PATH.write_text(
+        json.dumps({"chat_ids": sorted(ids)}, indent=2) + "\n"
     )
-    resp.raise_for_status()
+
+
+def _discover_chat_ids(token: str) -> set[int]:
+    try:
+        resp = requests.get(
+            TELEGRAM_GET_UPDATES.format(token=token), timeout=15
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("ok"):
+            return set()
+        ids: set[int] = set()
+        for upd in data.get("result", []):
+            msg = (
+                upd.get("message")
+                or upd.get("edited_message")
+                or upd.get("channel_post")
+                or upd.get("my_chat_member", {}).get("chat") and {"chat": upd["my_chat_member"]["chat"]}
+                or {}
+            )
+            chat = msg.get("chat") or {}
+            cid = chat.get("id")
+            if isinstance(cid, int):
+                ids.add(cid)
+        return ids
+    except Exception as e:
+        logger.warning("getUpdates failed: %s", e)
+        return set()
 
 
 def _days_between(earlier_iso: str, later_iso: str) -> int:

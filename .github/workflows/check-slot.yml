@@ -51,12 +51,12 @@ jobs:
         run: |
           git config user.email "slot-bot@users.noreply.github.com"
           git config user.name "slot-bot"
-          if ! git diff --quiet -- state.json; then
-            git add state.json
+          if ! git diff --quiet -- state.json chat_ids.json; then
+            git add state.json chat_ids.json
             git commit -m "update state [skip ci]"
             git push
           else
-            echo "state.json unchanged"
+            echo "state.json and chat_ids.json unchanged"
           fi
 
       - name: Upload debug artifacts on failure
