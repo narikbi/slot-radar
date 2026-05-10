@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-06-25",
   "earliest_slot_time": "10:00",
   "earliest_slot_weekday": "Thursday",
-  "last_check_utc": "2026-05-10T21:20:21Z",
+  "last_check_utc": "2026-05-10T22:14:16Z",
   "last_status": "fail: CaptchaError: 2captcha error: {'status': 0, 'request': 'ERROR_CAPTCHA_UNSOLVABLE', 'error_text': 'Workers could not solve the Captcha'}",
-  "consecutive_failures": 2,
+  "consecutive_failures": 3,
   "last_heartbeat_utc": "2026-05-10T17:02:12Z"
 }
