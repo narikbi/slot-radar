@@ -47,9 +47,9 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 | `GMAIL_USER` | `<your_email>@gmail.com` (тот же, что в форме!) |
 | `GMAIL_APP_PASSWORD` | 16-значный пароль приложения |
 | `TELEGRAM_BOT_TOKEN` | `123456:ABC-...` |
-| `TELEGRAM_CHAT_ID` | число из getUpdates |
-| `APPLICANT_NAME` | `<First Last>` |
-| `APPLICANT_DOB` | `<DD/MM/YYYY>` (DD/MM/YYYY) |
+| `TELEGRAM_CHAT_ID` | число из getUpdates (опционально, если используешь fan-out) |
+| `APPLICANT_NAME` | `<First Last>` (как в паспорте) |
+| `APPLICANT_DOB` | `<DD/MM/YYYY>` |
 | `APPLICANT_PHONE` | `<+phone>` |
 | `APPLICANT_EMAIL` | `<your_email>@gmail.com` (как в Gmail) |
 | `APPLICANT_PASSPORT` | `<passport_number>` |
