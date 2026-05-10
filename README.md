@@ -1,6 +1,6 @@
-# Visa Hungary Almaty — Slot Monitor
+# slot-radar
 
-Каждый час проверяет [konzinfoidopont.mfa.gov.hu](https://konzinfoidopont.mfa.gov.hu) и шлёт в Telegram уведомление, если появился слот **раньше** уже зафиксированного.
+Polls a booking site on a schedule and sends a Telegram alert when an earlier appointment slot becomes available.
 
 ## Как это работает
 
