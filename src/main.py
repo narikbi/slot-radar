@@ -4,10 +4,12 @@ import asyncio
 import logging
 import sys
 import traceback
+from datetime import datetime, timedelta, timezone
 
 from . import booking, notify, state
 
 FAILURE_NOTIFY_THRESHOLD = 5
+HEARTBEAT_INTERVAL = timedelta(hours=24)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -55,8 +57,24 @@ async def run() -> int:
     # reflect reality (e.g., if today's slot is taken, tomorrow we compare
     # against the new actual earliest, not the stale historical peak).
     s = state.update_with_slot(s, slot)
+
+    if _heartbeat_due(s):
+        logger.info("Heartbeat due — sending alive ping")
+        notify.send_heartbeat(slot)
+        s.last_heartbeat_utc = state._now_iso()
+
     state.save(s)
     return 0
+
+
+def _heartbeat_due(s: state.State) -> bool:
+    if not s.last_heartbeat_utc:
+        return True
+    try:
+        last = datetime.fromisoformat(s.last_heartbeat_utc.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return datetime.now(timezone.utc) - last >= HEARTBEAT_INTERVAL
 
 
 def main() -> None:

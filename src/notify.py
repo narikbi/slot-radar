@@ -52,6 +52,16 @@ def send_slot_moved_later(prev: Slot, new: Slot) -> None:
     _send(text)
 
 
+def send_heartbeat(slot: Slot) -> None:
+    text = (
+        "🟢 <b>Monitor alive</b>\n"
+        f"Самая ранняя дата: <b>{escape(slot.date)} {escape(slot.weekday)} {escape(slot.time)}</b>\n"
+        "Если что-то освободится раньше — пришлю.\n\n"
+        f"Бронирование: {BOOKING_URL}"
+    )
+    _send(text)
+
+
 def send_monitor_broken(failures: int, reason: str) -> None:
     text = (
         "⚠️ <b>Visa monitor сломался</b>\n"

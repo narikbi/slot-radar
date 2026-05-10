@@ -23,6 +23,7 @@ class State:
     last_check_utc: str
     last_status: str
     consecutive_failures: int
+    last_heartbeat_utc: str = ""
 
     @property
     def earliest_slot(self) -> Slot:
