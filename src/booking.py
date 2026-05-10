@@ -51,10 +51,31 @@ async def find_earliest_slot() -> Slot:
             await _click_select_date(page)
             await _wait_for_captcha_field(page)
 
-            answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
-            await _fill_captcha(page, answer)
-            await _click_select_date(page)
-            await _check_for_incorrect_code(page)
+            max_captcha_attempts = 2  # original + 1 retry; 3rd wrong = lockout
+            for attempt in range(1, max_captcha_attempts + 1):
+                answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
+                await _fill_captcha(page, answer)
+                await _click_select_date(page)
+
+                if not await _is_incorrect_code_visible(page):
+                    break  # captcha accepted
+
+                if attempt == max_captcha_attempts:
+                    raise BookingError(
+                        f"Captcha rejected on {max_captcha_attempts} attempts in a row. "
+                        "Aborting to preserve attempts (3 wrong = lockout)."
+                    )
+
+                logger.warning(
+                    "Captcha attempt %d was rejected, requesting fresh captcha",
+                    attempt,
+                )
+                await _dismiss_modals(page)
+                captcha_since = time.time()
+                await _click_request_new_code(page)
+                await asyncio.sleep(1)
+                await _wait_for_captcha_field(page)
+
             await _dismiss_modals(page)
 
             slot = await _read_first_slot(page)
@@ -281,22 +302,25 @@ def _captcha_input_locator(page: Page):
     return label.locator("xpath=following::input[1]")
 
 
-async def _check_for_incorrect_code(page: Page) -> None:
-    """If the site rejected our captcha answer, abort early.
-
-    The consulate locks out the email/passport after 3 wrong attempts in a row,
-    so we MUST NOT retry within the same run. Wait for next cron tick instead.
-    """
+async def _is_incorrect_code_visible(page: Page) -> bool:
+    """Return True if the site shows an 'Incorrect code' modal after captcha submit."""
     try:
         await page.locator(".modal.show").locator(
             "text=/incorrect|invalid|wrong|hib|érvénytelen|hibás/i"
         ).first.wait_for(state="visible", timeout=4000)
-        raise BookingError(
-            "Captcha was rejected by site (Incorrect code). "
-            "Aborting to preserve attempts (3 wrong = lockout)."
-        )
+        return True
     except PlaywrightTimeout:
-        return  # No error modal — captcha was accepted
+        return False
+
+
+async def _click_request_new_code(page: Page) -> None:
+    """Click the 'Request for a new code' button to trigger a fresh captcha email."""
+    btn = page.get_by_role(
+        "button", name=re.compile(r"request\s*for\s*a?\s*new\s*code", re.I)
+    )
+    if not await btn.count():
+        btn = page.get_by_text(re.compile(r"request\s*for\s*a?\s*new\s*code", re.I))
+    await btn.first.click()
 
 
 async def _dismiss_modals(page: Page) -> None:
