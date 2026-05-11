@@ -51,30 +51,53 @@ async def find_earliest_slot() -> Slot:
             await _click_select_date(page)
             await _wait_for_captcha_field(page)
 
-            max_captcha_attempts = 2  # original + 1 retry; 3rd wrong = lockout
-            for attempt in range(1, max_captcha_attempts + 1):
-                answer = await asyncio.to_thread(captcha.solve_from_email, captcha_since)
+            # 2captcha errors (UNSOLVABLE, network) don't count toward site attempts —
+            # we can retry getting a fresh captcha without risking site lockout.
+            # Site rejections (Incorrect code) DO count — cap at 2 to leave a 1-attempt
+            # buffer before the consulate's 3-wrong-answers lockout.
+            max_2captcha_failures = 4
+            max_site_rejections = 2
+            twocaptcha_failures = 0
+            site_rejections = 0
+
+            while True:
+                try:
+                    answer = await asyncio.to_thread(
+                        captcha.solve_from_email, captcha_since
+                    )
+                except captcha.CaptchaError as e:
+                    twocaptcha_failures += 1
+                    logger.warning(
+                        "2captcha failed (%d/%d): %s",
+                        twocaptcha_failures, max_2captcha_failures, e,
+                    )
+                    if twocaptcha_failures >= max_2captcha_failures:
+                        raise BookingError(
+                            f"2captcha repeatedly failed {twocaptcha_failures} times: {e}"
+                        )
+                    await _request_new_captcha(page)
+                    captcha_since = time.time()
+                    continue
+
                 await _fill_captcha(page, answer)
                 await _click_select_date(page)
 
                 if not await _is_incorrect_code_visible(page):
-                    break  # captcha accepted
+                    break  # site accepted the captcha
 
-                if attempt == max_captcha_attempts:
+                site_rejections += 1
+                logger.warning(
+                    "Site rejected captcha (rejection %d/%d)",
+                    site_rejections, max_site_rejections,
+                )
+                if site_rejections >= max_site_rejections:
                     raise BookingError(
-                        f"Captcha rejected on {max_captcha_attempts} attempts in a row. "
+                        f"Site rejected captcha {site_rejections} times. "
                         "Aborting to preserve attempts (3 wrong = lockout)."
                     )
-
-                logger.warning(
-                    "Captcha attempt %d was rejected, requesting fresh captcha",
-                    attempt,
-                )
                 await _dismiss_modals(page)
+                await _request_new_captcha(page)
                 captcha_since = time.time()
-                await _click_request_new_code(page)
-                await asyncio.sleep(1)
-                await _wait_for_captcha_field(page)
 
             await _dismiss_modals(page)
 
@@ -321,6 +344,13 @@ async def _click_request_new_code(page: Page) -> None:
     if not await btn.count():
         btn = page.get_by_text(re.compile(r"request\s*for\s*a?\s*new\s*code", re.I))
     await btn.first.click()
+
+
+async def _request_new_captcha(page: Page) -> None:
+    """Click 'Request for a new code', wait for the captcha field to be ready again."""
+    await _click_request_new_code(page)
+    await asyncio.sleep(1)
+    await _wait_for_captcha_field(page)
 
 
 async def _dismiss_modals(page: Page) -> None:
