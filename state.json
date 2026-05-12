@@ -1,9 +1,9 @@
 {
-  "earliest_slot_date": "2026-05-13",
-  "earliest_slot_time": "11:15",
-  "earliest_slot_weekday": "Wednesday",
-  "last_check_utc": "2026-05-12T19:50:18Z",
-  "last_status": "fail: TimeoutError: Page.goto: Timeout 45000ms exceeded.\nCall log:\nnavigating to \"https://konzinfoidopont.mfa.gov.hu/\", waiting until \"load\"\n",
-  "consecutive_failures": 1,
+  "earliest_slot_date": "2026-05-18",
+  "earliest_slot_time": "09:30",
+  "earliest_slot_weekday": "Monday",
+  "last_check_utc": "2026-05-12T22:49:00Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
   "last_heartbeat_utc": "2026-05-12T17:40:25Z"
 }
