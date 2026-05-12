@@ -1,9 +1,9 @@
 {
   "earliest_slot_date": "2026-06-25",
-  "earliest_slot_time": "11:15",
+  "earliest_slot_time": "14:45",
   "earliest_slot_weekday": "Thursday",
-  "last_check_utc": "2026-05-12T05:05:05Z",
-  "last_status": "fail: HTTPError: 521 Server Error: <none> for url: https://2captcha.com/res.php?key=6663427a9d47b30d11113acb1761a974&action=get&id=82663987318&json=1",
-  "consecutive_failures": 1,
+  "last_check_utc": "2026-05-12T07:52:15Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
   "last_heartbeat_utc": "2026-05-11T17:25:33Z"
 }
