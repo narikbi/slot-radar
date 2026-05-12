@@ -1,9 +1,9 @@
 {
-  "earliest_slot_date": "2026-06-25",
-  "earliest_slot_time": "14:45",
-  "earliest_slot_weekday": "Thursday",
-  "last_check_utc": "2026-05-12T10:33:39Z",
-  "last_status": "fail: BookingError: Site rejected captcha 2 times. Aborting to preserve attempts (3 wrong = lockout).",
-  "consecutive_failures": 1,
+  "earliest_slot_date": "2026-05-13",
+  "earliest_slot_time": "09:00",
+  "earliest_slot_weekday": "Wednesday",
+  "last_check_utc": "2026-05-12T12:31:56Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
   "last_heartbeat_utc": "2026-05-11T17:25:33Z"
 }
