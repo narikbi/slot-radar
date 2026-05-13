@@ -1,8 +1,8 @@
 {
-  "earliest_slot_date": "2026-06-26",
-  "earliest_slot_time": "09:45",
-  "earliest_slot_weekday": "Friday",
-  "last_check_utc": "2026-05-13T06:50:59Z",
+  "earliest_slot_date": "2026-06-22",
+  "earliest_slot_time": "10:00",
+  "earliest_slot_weekday": "Monday",
+  "last_check_utc": "2026-05-13T09:48:56Z",
   "last_status": "ok",
   "consecutive_failures": 0,
   "last_heartbeat_utc": "2026-05-12T17:40:25Z"
