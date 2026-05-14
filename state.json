@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-06-08",
   "earliest_slot_time": "11:00",
   "earliest_slot_weekday": "Monday",
-  "last_check_utc": "2026-05-14T03:00:53Z",
-  "last_status": "ok",
-  "consecutive_failures": 0,
+  "last_check_utc": "2026-05-14T06:30:18Z",
+  "last_status": "fail: TimeoutError: Page.goto: Timeout 45000ms exceeded.\nCall log:\nnavigating to \"https://konzinfoidopont.mfa.gov.hu/\", waiting until \"load\"\n",
+  "consecutive_failures": 1,
   "last_heartbeat_utc": "2026-05-13T17:42:35Z"
 }
