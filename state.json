@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-06-18",
   "earliest_slot_time": "15:15",
   "earliest_slot_weekday": "Thursday",
-  "last_check_utc": "2026-05-15T03:33:25Z",
-  "last_status": "ok",
-  "consecutive_failures": 0,
+  "last_check_utc": "2026-05-15T06:52:43Z",
+  "last_status": "fail: TimeoutError: Page.wait_for_function: Timeout 90000ms exceeded.",
+  "consecutive_failures": 1,
   "last_heartbeat_utc": "2026-05-14T17:52:29Z"
 }
