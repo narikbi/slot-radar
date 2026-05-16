@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-05-18",
   "earliest_slot_time": "14:00",
   "earliest_slot_weekday": "Monday",
-  "last_check_utc": "2026-05-16T18:00:57Z",
-  "last_status": "fail: HTTPError: 520 Server Error: <none> for url: https://2captcha.com/res.php?key=6663427a9d47b30d11113acb1761a974&action=get&id=82707104544&json=1",
-  "consecutive_failures": 1,
-  "last_heartbeat_utc": "2026-05-15T18:08:07Z"
+  "last_check_utc": "2026-05-16T19:11:49Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
+  "last_heartbeat_utc": "2026-05-16T19:11:51Z"
 }
