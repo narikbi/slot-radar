@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-05-18",
   "earliest_slot_time": "14:00",
   "earliest_slot_weekday": "Monday",
-  "last_check_utc": "2026-05-17T04:40:41Z",
-  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for locator(\"#birthDate\")\n",
-  "consecutive_failures": 2,
+  "last_check_utc": "2026-05-17T07:41:23Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
   "last_heartbeat_utc": "2026-05-16T19:11:51Z"
 }
