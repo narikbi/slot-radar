@@ -2,8 +2,8 @@
   "earliest_slot_date": "2026-05-18",
   "earliest_slot_time": "14:00",
   "earliest_slot_weekday": "Monday",
-  "last_check_utc": "2026-05-17T11:13:15Z",
-  "last_status": "ok",
-  "consecutive_failures": 0,
+  "last_check_utc": "2026-05-17T12:19:26Z",
+  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for get_by_role(\"button\", name=re.compile(r\"request\\s*for\\s*a?\\s*new\\s*code\", re.IGNORECASE)).first\n  -   locator resolve",
+  "consecutive_failures": 1,
   "last_heartbeat_utc": "2026-05-16T19:11:51Z"
 }
