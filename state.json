@@ -1,9 +1,9 @@
 {
-  "earliest_slot_date": "2026-05-20",
-  "earliest_slot_time": "09:15",
-  "earliest_slot_weekday": "Wednesday",
-  "last_check_utc": "2026-05-20T00:12:03Z",
-  "last_status": "fail: TimeoutError: Locator.click: Timeout 45000ms exceeded.\nCall log:\nwaiting for locator(\"#birthDate\")\n",
-  "consecutive_failures": 3,
-  "last_heartbeat_utc": "2026-05-18T21:54:03Z"
+  "earliest_slot_date": "2026-05-22",
+  "earliest_slot_time": "09:30",
+  "earliest_slot_weekday": "Friday",
+  "last_check_utc": "2026-05-20T04:51:21Z",
+  "last_status": "ok",
+  "consecutive_failures": 0,
+  "last_heartbeat_utc": "2026-05-20T04:51:26Z"
 }
